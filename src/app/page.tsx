@@ -384,7 +384,7 @@ export default function Home() {
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-900 text-white">
             <DBIcon />
           </span>
-          <span className="text-sm font-bold tracking-tight">Data Copilot</span>
+          <span className="text-sm font-bold tracking-tight">AgentQuery</span>
           <span className="hidden text-xs text-neutral-400 sm:block">PostgreSQL · read-only AI</span>
         </div>
         <div className="flex items-center gap-2">

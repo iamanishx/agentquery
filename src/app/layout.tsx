@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Data Copilot",
+  title: "AgentQuery",
   description: "AI-powered PostgreSQL query assistant",
 };
 

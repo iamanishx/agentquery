@@ -22,7 +22,7 @@ interface AppDB extends DBSchema {
   };
 }
 
-const DB_NAME = "metabase-v2";
+const DB_NAME = "agentquery";
 const DB_VERSION = 2;
 
 function getDb() {
