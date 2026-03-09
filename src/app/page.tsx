@@ -109,7 +109,7 @@ export default function Home() {
   const [editingDbId, setEditingDbId] = useState("");
   const [connForm, setConnForm] = useState(emptyDb());
   const [useConnStr, setUseConnStr] = useState(false);
-  /* api key state — stored only in memory (sessionStorage on mount) */
+  /* api key state — persisted in localStorage */
   const [openaiKey, setOpenaiKey] = useState("");
   const [googleKey, setGoogleKey] = useState("");
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
@@ -118,16 +118,16 @@ export default function Home() {
   const selectedDb = useMemo(() => databases.find((d) => d.id === selectedDbId) ?? null, [databases, selectedDbId]);
   const selectedSession = useMemo(() => sessions.find((s) => s.id === selectedSessionId) ?? null, [sessions, selectedSessionId]);
 
-  /* load keys from sessionStorage on mount */
+  /* load keys from localStorage on mount */
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setOpenaiKey(sessionStorage.getItem("openai_key") ?? "");
-    setGoogleKey(sessionStorage.getItem("google_key") ?? "");
+    setOpenaiKey(localStorage.getItem("openai_key") ?? "");
+    setGoogleKey(localStorage.getItem("google_key") ?? "");
   }, []);
 
-  /* persist keys to sessionStorage when changed */
-  useEffect(() => { if (typeof window !== "undefined") sessionStorage.setItem("openai_key", openaiKey); }, [openaiKey]);
-  useEffect(() => { if (typeof window !== "undefined") sessionStorage.setItem("google_key", googleKey); }, [googleKey]);
+  /* persist keys to localStorage when changed */
+  useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("openai_key", openaiKey); }, [openaiKey]);
+  useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("google_key", googleKey); }, [googleKey]);
 
   /* reset model when provider changes */
   useEffect(() => { setModel(providerModels[provider][0]); }, [provider]);
@@ -986,7 +986,7 @@ export default function Home() {
               <div>
                 <p className="mb-3 text-xs font-bold uppercase tracking-widest text-neutral-500">AI API Keys</p>
                 <p className="mb-4 text-xs leading-relaxed text-neutral-500">
-                  Keys are stored only in <strong>sessionStorage</strong> — they are cleared when you close the tab and never sent anywhere except the AI provider.
+                  Keys are stored in <strong>localStorage</strong> — they persist across page refreshes and are never sent anywhere except the AI provider.
                 </p>
                 <div className="space-y-3">
                   <KeyField
