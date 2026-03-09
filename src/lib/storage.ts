@@ -16,10 +16,14 @@ interface AppDB extends DBSchema {
     value: ChatMessage;
     indexes: { "by-session": string };
   };
+  settings: {
+    key: string;
+    value: { key: string; value: string };
+  };
 }
 
 const DB_NAME = "metabase-v2";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function getDb() {
   return openDB<AppDB>(DB_NAME, DB_VERSION, {
@@ -35,6 +39,9 @@ function getDb() {
       if (!db.objectStoreNames.contains("messages")) {
         const messages = db.createObjectStore("messages", { keyPath: "id" });
         messages.createIndex("by-session", "sessionId");
+      }
+      if (!db.objectStoreNames.contains("settings")) {
+        db.createObjectStore("settings", { keyPath: "key" });
       }
     },
   });
@@ -69,6 +76,7 @@ export async function clearAllLocalData() {
     db.clear("messages"),
     db.clear("sessions"),
     db.clear("databases"),
+    db.clear("settings"),
   ]);
 }
 
@@ -110,4 +118,15 @@ export async function putMessages(messages: ChatMessage[]) {
     }
   }
   await tx.done;
+}
+
+export async function getSetting(key: string): Promise<string | undefined> {
+  const db = await getDb();
+  const row = await db.get("settings", key);
+  return row?.value;
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  const db = await getDb();
+  await db.put("settings", { key, value });
 }

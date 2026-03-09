@@ -22,6 +22,8 @@ import {
   removeSession,
   upsertDatabase,
   upsertSession,
+  getSetting,
+  setSetting,
 } from "@/lib/storage";
 import type {
   ChatMessage,
@@ -118,16 +120,15 @@ export default function Home() {
   const selectedDb = useMemo(() => databases.find((d) => d.id === selectedDbId) ?? null, [databases, selectedDbId]);
   const selectedSession = useMemo(() => sessions.find((s) => s.id === selectedSessionId) ?? null, [sessions, selectedSessionId]);
 
-  /* load keys from localStorage on mount */
+  /* load keys from IndexedDB on mount */
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    setOpenaiKey(localStorage.getItem("openai_key") ?? "");
-    setGoogleKey(localStorage.getItem("google_key") ?? "");
+    getSetting("openai_key").then((v) => { if (v) setOpenaiKey(v); });
+    getSetting("google_key").then((v) => { if (v) setGoogleKey(v); });
   }, []);
 
-  /* persist keys to localStorage when changed */
-  useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("openai_key", openaiKey); }, [openaiKey]);
-  useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("google_key", googleKey); }, [googleKey]);
+  /* persist keys to IndexedDB when changed */
+  useEffect(() => { if (openaiKey !== "") setSetting("openai_key", openaiKey); }, [openaiKey]);
+  useEffect(() => { if (googleKey !== "") setSetting("google_key", googleKey); }, [googleKey]);
 
   /* reset model when provider changes */
   useEffect(() => { setModel(providerModels[provider][0]); }, [provider]);
@@ -986,7 +987,7 @@ export default function Home() {
               <div>
                 <p className="mb-3 text-xs font-bold uppercase tracking-widest text-neutral-500">AI API Keys</p>
                 <p className="mb-4 text-xs leading-relaxed text-neutral-500">
-                  Keys are stored in <strong>localStorage</strong> — they persist across page refreshes and are never sent anywhere except the AI provider.
+                  Keys are stored in <strong>IndexedDB</strong> — they persist across page refreshes and are never sent anywhere except the AI provider.
                 </p>
                 <div className="space-y-3">
                   <KeyField
