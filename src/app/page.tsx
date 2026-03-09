@@ -24,6 +24,7 @@ import {
   upsertSession,
   getSetting,
   setSetting,
+  deleteSetting,
 } from "@/lib/storage";
 import type {
   ChatMessage,
@@ -126,9 +127,15 @@ export default function Home() {
     getSetting("google_key").then((v) => { if (v) setGoogleKey(v); });
   }, []);
 
-  /* persist keys to IndexedDB when changed */
-  useEffect(() => { if (openaiKey !== "") setSetting("openai_key", openaiKey); }, [openaiKey]);
-  useEffect(() => { if (googleKey !== "") setSetting("google_key", googleKey); }, [googleKey]);
+  /* persist keys to IndexedDB when changed (including clear on empty) */
+  useEffect(() => {
+    if (openaiKey === "") deleteSetting("openai_key");
+    else setSetting("openai_key", openaiKey);
+  }, [openaiKey]);
+  useEffect(() => {
+    if (googleKey === "") deleteSetting("google_key");
+    else setSetting("google_key", googleKey);
+  }, [googleKey]);
 
   /* reset model when provider changes */
   useEffect(() => { setModel(providerModels[provider][0]); }, [provider]);
