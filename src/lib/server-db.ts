@@ -2,6 +2,7 @@ import postgres from "postgres";
 import type { QueryResult, SchemaColumn } from "@/lib/types";
 
 type Credentials = {
+  connectionString?: string;
   host: string;
   port: number;
   database: string;
@@ -16,6 +17,7 @@ function quoteIdentifier(value: string) {
 const connections = new Map<string, postgres.Sql>();
 
 function getKey(credentials: Credentials) {
+  if (credentials.connectionString) return credentials.connectionString;
   return [
     credentials.host,
     credentials.port,
@@ -31,17 +33,24 @@ export function getConnection(credentials: Credentials) {
     return existing;
   }
 
-  const client = postgres({
-    host: credentials.host,
-    port: credentials.port,
-    database: credentials.database,
-    user: credentials.user,
-    password: credentials.password,
-    max: 1,
-    prepare: false,
-    idle_timeout: 10,
-    connect_timeout: 10,
-  });
+  const client = credentials.connectionString
+    ? postgres(credentials.connectionString, {
+        max: 1,
+        prepare: false,
+        idle_timeout: 10,
+        connect_timeout: 10,
+      })
+    : postgres({
+        host: credentials.host,
+        port: credentials.port,
+        database: credentials.database,
+        user: credentials.user,
+        password: credentials.password,
+        max: 1,
+        prepare: false,
+        idle_timeout: 10,
+        connect_timeout: 10,
+      });
 
   connections.set(key, client);
   return client;

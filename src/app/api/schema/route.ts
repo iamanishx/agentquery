@@ -3,11 +3,12 @@ import { z } from "zod";
 import { fetchSchema } from "@/lib/server-db";
 
 const credentialsSchema = z.object({
-  host: z.string().min(1),
-  port: z.number().int().positive(),
-  database: z.string().min(1),
-  user: z.string().min(1),
-  password: z.string(),
+  connectionString: z.string().optional(),
+  host: z.string().optional(),
+  port: z.number().int().positive().optional(),
+  database: z.string().optional(),
+  user: z.string().optional(),
+  password: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -16,7 +17,8 @@ export async function POST(req: NextRequest) {
       .object({ credentials: credentialsSchema })
       .parse(await req.json());
 
-    const schema = await fetchSchema(credentials);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const schema = await fetchSchema(credentials as any);
     return NextResponse.json(schema);
   } catch (error) {
     return NextResponse.json(

@@ -1,6 +1,7 @@
 export interface DatabaseCredential {
   id: string;
   name: string;
+  connectionString?: string;
   host: string;
   port: number;
   database: string;

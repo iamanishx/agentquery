@@ -4,24 +4,26 @@ import { agentRequestSchema, createSqlAgent } from "@/lib/agent";
 export async function POST(req: NextRequest) {
   try {
     const payload = agentRequestSchema.parse(await req.json());
-    const { credentials, prompt, history, provider, model } = payload;
-    const agent = createSqlAgent(provider, model, credentials);
+    const { credentials, prompt, history, provider, model, apiKeys } = payload;
+    const agent = await createSqlAgent(provider, model, credentials, apiKeys);
     const result = await agent.generate({
       messages: [
-        ...history.map((message) => ({ role: message.role, content: message.content })),
+        ...history.map((m) => ({ role: m.role, content: m.content })),
         { role: "user", content: prompt },
       ],
     });
 
-    const suggestions = result.output.suggestions.map((suggestion, index) => ({
-      id: `query-${Date.now()}-${index}`,
-      ...suggestion,
-    }));
+    const suggestions = result.output.suggestions.map(
+      (s: { name: string; sql: string; rationale: string }, i: number) => ({
+        id: `query-${Date.now()}-${i}`,
+        ...s,
+      }),
+    );
 
     return NextResponse.json({
       summary: result.output.summary,
       suggestions,
-      toolCalls: result.toolCalls?.map((call) => ({ toolName: call.toolName, input: call.input })) ?? [],
+      toolCalls: result.toolCalls ?? [],
     });
   } catch (error) {
     return NextResponse.json(
