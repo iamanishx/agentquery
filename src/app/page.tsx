@@ -39,7 +39,7 @@ type AgentResponse = {
   toolCalls: Array<{ toolName: string; input: unknown }>;
 };
 type ProviderOption = "openai" | "google";
-type Modal = "none" | "connection" | "settings";
+type Modal = "none" | "connection" | "settings" | "results";
 
 const providerModels: Record<ProviderOption, string[]> = {
   openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"],
@@ -350,6 +350,29 @@ export default function Home() {
 
   const apiKeyMissing = (provider === "openai" && !openaiKey) || (provider === "google" && !googleKey);
   const chartColors = ["#171717", "#71717a", "#d4d4d8"];
+
+  function exportCsv() {
+    if (!activeResult) return;
+    const header = activeResult.columns.join(",");
+    const rows = activeResult.rows.map((row) =>
+      activeResult.columns
+        .map((col) => {
+          const val = String(row[col] ?? "");
+          return val.includes(",") || val.includes('"') || val.includes("\n")
+            ? `"${val.replace(/"/g, '""')}"`
+            : val;
+        })
+        .join(","),
+    );
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `query-result-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   /* ═══════════════════════════════════════════════════════ */
   return (
@@ -698,7 +721,29 @@ export default function Home() {
             <div className="flex w-[380px] shrink-0 flex-col overflow-hidden">
               {/* stats */}
               <div className="border-b border-neutral-100 p-4">
-                <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Last Result</p>
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Last Result</p>
+                  {activeResult && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={exportCsv}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-neutral-500 hover:text-neutral-900 transition-colors"
+                        title="Export CSV"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        CSV
+                      </button>
+                      <button
+                        onClick={() => setModal("results")}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-neutral-500 hover:text-neutral-900 transition-colors"
+                        title="Expand full view"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                        Expand
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { label: "Rows", value: activeResult?.rowCount ?? "—" },
@@ -779,6 +824,94 @@ export default function Home() {
           </div>
         </main>
       </div>
+
+      {/* ══ MODAL: Expanded Results ════════════════════════ */}
+      {modal === "results" && activeResult && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-white">
+          {/* header */}
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-100 px-6">
+            <div className="flex items-center gap-4">
+              <p className="text-sm font-bold text-neutral-900">Query Results</p>
+              <div className="flex items-center gap-3 text-xs text-neutral-500">
+                <span className="rounded-md bg-neutral-100 px-2 py-1 font-semibold">{activeResult.rowCount} rows</span>
+                <span className="rounded-md bg-neutral-100 px-2 py-1 font-semibold">{activeResult.columns.length} cols</span>
+                <span className="rounded-md bg-neutral-100 px-2 py-1 font-semibold">{activeResult.executionTime}ms</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={exportCsv}
+                className="flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 transition-colors"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export CSV
+              </button>
+              <button
+                onClick={() => setModal("none")}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 hover:bg-neutral-50 transition-colors"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+          </div>
+
+          {/* body: chart + grid side by side when numeric cols exist, otherwise full grid */}
+          <div className="flex flex-1 overflow-hidden">
+            {/* chart panel — only shown when numeric data exists */}
+            {numericCols.length > 0 && (
+              <div className="flex w-[380px] shrink-0 flex-col border-r border-neutral-100 p-5">
+                <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Chart</p>
+                <div className="flex-1">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartRows} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f4f4f5" />
+                      <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#a1a1aa", fontSize: 11 }} dy={6} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: "#a1a1aa", fontSize: 11 }} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: "#fff", border: "1px solid #e4e4e7", borderRadius: 8, fontSize: 12 }}
+                        itemStyle={{ color: "#171717", fontWeight: 600 }}
+                      />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
+                      {numericCols.map((col, i) => (
+                        <Bar key={col} dataKey={col} fill={chartColors[i % chartColors.length]} radius={[3, 3, 0, 0]} maxBarSize={40} />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* full data grid */}
+            <div className="flex flex-1 flex-col overflow-hidden p-5">
+              <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Data Grid</p>
+              <div className="flex-1 overflow-auto rounded-xl border border-neutral-100">
+                <table className="w-full border-collapse text-left text-sm">
+                  <thead className="sticky top-0 z-10 bg-neutral-50 shadow-[0_1px_0_#e5e7eb]">
+                    <tr>
+                      {activeResult.columns.map((col) => (
+                        <th key={col} className="whitespace-nowrap px-4 py-3 text-xs font-bold text-neutral-600">
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeResult.rows.map((row, ri) => (
+                      <tr key={ri} className={`border-t border-neutral-50 hover:bg-neutral-50 transition-colors ${ri % 2 === 0 ? "" : "bg-neutral-50/40"}`}>
+                        {activeResult.columns.map((col) => (
+                          <td key={`${ri}-${col}`} className="px-4 py-2.5 text-neutral-700">
+                            {String(row[col] ?? "")}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══ MODAL: Connection ══════════════════════════════ */}
       {modal === "connection" && (
