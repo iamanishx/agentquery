@@ -99,6 +99,7 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [schema, setSchema] = useState<SchemaColumn[]>([]);
   const [schemaError, setSchemaError] = useState("");
+  const [schemaFilter, setSchemaFilter] = useState<string>("all");
   const [manualQuery, setManualQuery] = useState("");
   const [manualQueryResult, setManualQueryResult] = useState<QueryResult | null>(null);
   const [manualQueryLoading, setManualQueryLoading] = useState(false);
@@ -354,12 +355,18 @@ export default function Home() {
   const chartRows = useMemo(() => (activeResult?.rows ?? []).slice(0, 14).map((r, i) => ({ label: String(i + 1), ...r })), [activeResult]);
 
   const schemaGroups = useMemo(() => {
+    const filtered = schemaFilter === "all" ? schema : schema.filter((c) => c.schema === schemaFilter);
     const g = new Map<string, SchemaColumn[]>();
-    for (const col of schema) {
+    for (const col of filtered) {
       const k = `${col.schema}.${col.tableName}`;
       g.set(k, [...(g.get(k) ?? []), col]);
     }
-    return Array.from(g.entries());
+    return Array.from(g.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [schema, schemaFilter]);
+
+  const availableSchemas = useMemo(() => {
+    const s = new Set(schema.map((c) => c.schema));
+    return Array.from(s).sort();
   }, [schema]);
 
   const apiKeyMissing = (provider === "openai" && !openaiKey) || (provider === "google" && !googleKey);
@@ -950,26 +957,76 @@ export default function Home() {
 
       {/* ══ MODAL: Expanded Schema ════════════════════════ */}
       {modal === "schema" && (
-        <ModalBackdrop onClose={() => setModal("none")}>
-          <div className="flex h-[80vh] w-full max-w-4xl flex-col">
-            <ModalHeader title="Database Schema" onClose={() => setModal("none")} />
-            <div className="flex-1 overflow-y-auto p-4">
-              {schemaError && <p className="text-red-500">{schemaError}</p>}
-              {!schemaError && !schemaGroups.length && <p className="text-neutral-400">No schema loaded.</p>}
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {schemaGroups.map(([tableName, cols]) => (
-                  <div key={tableName} className="rounded-lg border border-neutral-200 p-3">
-                    <p className="mb-2 font-bold text-neutral-800">{tableName}</p>
-                    <div className="space-y-1">
-                      {cols.map((c) => (
-                        <div key={c.columnName} className="flex items-center justify-between text-xs">
-                          <span className="font-mono text-neutral-600">{c.columnName}</span>
-                          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-400">{c.dataType}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+        <ModalBackdrop onClose={() => { setModal("none"); setSchemaFilter("all"); }}>
+          <div className="flex h-[85vh] w-full max-w-6xl flex-col">
+            <ModalHeader title="Database Schema" onClose={() => { setModal("none"); setSchemaFilter("all"); }} />
+            {/* Schema filter */}
+            <div className="flex items-center gap-3 border-b border-neutral-200 px-4 py-3">
+              <span className="text-xs font-semibold text-neutral-500">Filter by schema:</span>
+              <select
+                value={schemaFilter}
+                onChange={(e) => setSchemaFilter(e.target.value)}
+                className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-700 outline-none focus:border-neutral-400"
+              >
+                <option value="all">All schemas ({availableSchemas.length})</option>
+                {availableSchemas.map((s) => (
+                  <option key={s} value={s}>{s}</option>
                 ))}
+              </select>
+            </div>
+            <div className="flex flex-1 overflow-hidden">
+              {/* Left: Table list */}
+              <div className="w-64 shrink-0 overflow-y-auto border-r border-neutral-200 bg-neutral-50">
+                <div className="p-2">
+                  <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Tables ({schemaGroups.length})</p>
+                  {schemaGroups.map(([tableName]) => (
+                    <button
+                      key={tableName}
+                      onClick={() => {
+                        const el = document.getElementById(`table-${tableName}`);
+                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }}
+                      className="w-full rounded px-3 py-2 text-left text-sm font-medium text-neutral-700 hover:bg-neutral-200"
+                    >
+                      {tableName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Right: Schema details */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {schemaError && <p className="text-red-500">{schemaError}</p>}
+                {!schemaError && !schemaGroups.length && <p className="text-neutral-400">No schema loaded.</p>}
+                <div className="space-y-6">
+                  {schemaGroups.map(([tableName, cols]) => (
+                    <div id={`table-${tableName}`} key={tableName} className="rounded-lg border border-neutral-200">
+                      <div className="flex items-center justify-between rounded-t-lg bg-neutral-100 px-4 py-3">
+                        <p className="font-bold text-neutral-800">{tableName}</p>
+                        <span className="text-xs text-neutral-500">{cols.length} columns</span>
+                      </div>
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-neutral-200 text-left text-xs font-semibold text-neutral-500">
+                            <th className="px-4 py-2">Column</th>
+                            <th className="px-4 py-2">Type</th>
+                            <th className="px-4 py-2">Nullable</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cols.map((c, i) => (
+                            <tr key={c.columnName} className={i % 2 === 0 ? "bg-white" : "bg-neutral-50/50"}>
+                              <td className="px-4 py-2 font-mono text-sm text-neutral-700">{c.columnName}</td>
+                              <td className="px-4 py-2">
+                                <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-mono text-blue-600">{c.dataType}</span>
+                              </td>
+                              <td className="px-4 py-2 text-xs text-neutral-500">{c.isNullable ? "YES" : "NO"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
