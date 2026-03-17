@@ -42,7 +42,7 @@ type AgentResponse = {
   toolCalls: Array<{ toolName: string; input: unknown }>;
 };
 type ProviderOption = "openai" | "google";
-type Modal = "none" | "connection" | "settings" | "results";
+type Modal = "none" | "connection" | "settings" | "results" | "schema" | "query";
 
 const providerModels: Record<ProviderOption, string[]> = {
   openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"],
@@ -99,6 +99,9 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [schema, setSchema] = useState<SchemaColumn[]>([]);
   const [schemaError, setSchemaError] = useState("");
+  const [manualQuery, setManualQuery] = useState("");
+  const [manualQueryResult, setManualQueryResult] = useState<QueryResult | null>(null);
+  const [manualQueryLoading, setManualQueryLoading] = useState(false);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [activeResult, setActiveResult] = useState<QueryResult | null>(null);
@@ -493,18 +496,29 @@ export default function Home() {
           <div className="border-t border-neutral-100 p-4">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Schema</span>
-              <button
-                onClick={() => selectedDb && void loadSchema(selectedDb)}
-                disabled={!selectedDb}
-                className="text-[11px] font-medium text-neutral-400 hover:text-neutral-700 disabled:opacity-30"
-              >
-                Refresh
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => selectedDb && void loadSchema(selectedDb)}
+                  disabled={!selectedDb}
+                  className="text-[11px] font-medium text-neutral-400 hover:text-neutral-700 disabled:opacity-30"
+                  title="Refresh schema"
+                >
+                  ↻
+                </button>
+                <button
+                  onClick={() => setModal("schema")}
+                  disabled={!selectedDb || !schemaGroups.length}
+                  className="text-[11px] font-medium text-neutral-400 hover:text-neutral-700 disabled:opacity-30"
+                  title="Expand schema view"
+                >
+                  ⤢
+                </button>
+              </div>
             </div>
-            <div className="max-h-48 space-y-2 overflow-y-auto text-xs">
+            <div className="max-h-32 space-y-2 overflow-y-auto text-xs">
               {schemaError && <p className="text-red-500">{schemaError}</p>}
               {!schemaError && !schemaGroups.length && <p className="text-neutral-400">Not loaded.</p>}
-              {schemaGroups.map(([key, cols]) => (
+              {schemaGroups.slice(0, 5).map(([key, cols]) => (
                 <div key={key}>
                   <p className="font-bold text-neutral-700">{key}</p>
                   <p className="mt-0.5 leading-relaxed text-neutral-400">
@@ -512,7 +526,17 @@ export default function Home() {
                   </p>
                 </div>
               ))}
+              {schemaGroups.length > 5 && (
+                <p className="text-neutral-400 italic">+{schemaGroups.length - 5} more tables</p>
+              )}
             </div>
+            <button
+              onClick={() => setModal("query")}
+              disabled={!selectedDb}
+              className="mt-3 w-full rounded-md border border-neutral-200 bg-white py-1.5 text-[11px] font-semibold text-neutral-600 hover:bg-neutral-50 disabled:opacity-30"
+            >
+              + Run Query
+            </button>
           </div>
 
           <div className="border-t border-neutral-100 p-3">
@@ -919,6 +943,115 @@ export default function Home() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ══ MODAL: Expanded Schema ════════════════════════ */}
+      {modal === "schema" && (
+        <ModalBackdrop onClose={() => setModal("none")}>
+          <div className="flex h-[80vh] w-full max-w-4xl flex-col">
+            <ModalHeader title="Database Schema" onClose={() => setModal("none")} />
+            <div className="flex-1 overflow-y-auto p-4">
+              {schemaError && <p className="text-red-500">{schemaError}</p>}
+              {!schemaError && !schemaGroups.length && <p className="text-neutral-400">No schema loaded.</p>}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {schemaGroups.map(([tableName, cols]) => (
+                  <div key={tableName} className="rounded-lg border border-neutral-200 p-3">
+                    <p className="mb-2 font-bold text-neutral-800">{tableName}</p>
+                    <div className="space-y-1">
+                      {cols.map((c) => (
+                        <div key={c.columnName} className="flex items-center justify-between text-xs">
+                          <span className="font-mono text-neutral-600">{c.columnName}</span>
+                          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-400">{c.dataType}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </ModalBackdrop>
+      )}
+
+      {/* ══ MODAL: Manual Query ════════════════════════════ */}
+      {modal === "query" && (
+        <ModalBackdrop onClose={() => { setModal("none"); setManualQuery(""); setManualQueryResult(null); }}>
+          <div className="flex h-[80vh] w-full max-w-4xl flex-col">
+            <ModalHeader title="Run SQL Query" onClose={() => { setModal("none"); setManualQuery(""); setManualQueryResult(null); }} />
+            <div className="flex flex-1 flex-col gap-4 p-4 overflow-hidden">
+              <div className="flex shrink-0 items-center gap-2">
+                <textarea
+                  value={manualQuery}
+                  onChange={(e) => setManualQuery(e.target.value)}
+                  placeholder="SELECT * FROM table_name LIMIT 100;"
+                  className="flex-1 resize-none rounded-lg border border-neutral-200 p-3 font-mono text-sm focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-100"
+                  rows={4}
+                  spellCheck={false}
+                />
+              </div>
+              <div className="flex shrink-0 items-center justify-between">
+                <button
+                  onClick={async () => {
+                    if (!selectedDb || !manualQuery.trim()) return;
+                    setManualQueryLoading(true);
+                    try {
+                      const res = await fetch("/api/query", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          credentials: credentialsPayload(selectedDb),
+                          sql: manualQuery.trim(),
+                        }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok || data.error) throw new Error(data.error || "Query failed");
+                      setManualQueryResult(data);
+                    } catch (err) {
+                      alert(err instanceof Error ? err.message : "Query failed");
+                    } finally {
+                      setManualQueryLoading(false);
+                    }
+                  }}
+                  disabled={!selectedDb || !manualQuery.trim() || manualQueryLoading}
+                  className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-50"
+                >
+                  {manualQueryLoading ? "Running..." : "Run Query"}
+                </button>
+                {manualQueryResult && (
+                  <span className="text-xs text-neutral-500">
+                    {manualQueryResult.rowCount} rows · {manualQueryResult.executionTime}ms
+                  </span>
+                )}
+              </div>
+              {manualQueryResult && (
+                <div className="flex-1 overflow-auto rounded-lg border border-neutral-200">
+                  <table className="w-full border-collapse text-left text-xs">
+                    <thead className="sticky top-0 bg-neutral-50">
+                      <tr>
+                        {manualQueryResult.columns.map((col) => (
+                          <th key={col} className="border-b border-neutral-200 px-3 py-2 font-semibold text-neutral-600">
+                            {col}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {manualQueryResult.rows.map((row, i) => (
+                        <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-neutral-50/50"}>
+                          {manualQueryResult.columns.map((col) => (
+                            <td key={col} className="border-b border-neutral-100 px-3 py-2 text-neutral-700">
+                              {row[col] === null ? <span className="text-neutral-400 italic">null</span> : String(row[col])}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </ModalBackdrop>
       )}
 
       {/* ══ MODAL: Connection ══════════════════════════════ */}
