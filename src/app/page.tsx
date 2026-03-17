@@ -229,25 +229,28 @@ export default function Home() {
   }
 
   async function saveConn() {
-    const now = Date.now();
-    const record: DatabaseCredential = {
-      id: editingDbId || uuidv4(),
-      createdAt: editingDbId ? (databases.find((d) => d.id === editingDbId)?.createdAt ?? now) : now,
-      updatedAt: now,
-      name: connForm.name,
-      connectionString: useConnStr ? connForm.connectionString : "",
-      host: useConnStr ? "" : connForm.host,
-      port: useConnStr ? 0 : connForm.port,
-      database: useConnStr ? "" : connForm.database,
-      user: useConnStr ? "" : connForm.user,
-      password: useConnStr ? "" : connForm.password,
-    };
-    await upsertDatabase(record);
-    await hydrateDbs();
-    setSelectedDbId(record.id);
-    setModal("none");
-    setEditingDbId("");
-    setConnForm(emptyDb());
+    try {
+      const now = Date.now();
+      const record: DatabaseCredential = {
+        id: editingDbId || uuidv4(),
+        createdAt: editingDbId ? (databases.find((d) => d.id === editingDbId)?.createdAt ?? now) : now,
+        updatedAt: now,
+        name: connForm.name,
+        connectionString: useConnStr ? connForm.connectionString : "",
+        host: useConnStr ? "" : connForm.host,
+        port: useConnStr ? 0 : connForm.port,
+        database: useConnStr ? "" : connForm.database,
+        user: useConnStr ? "" : connForm.user,
+        password: useConnStr ? "" : connForm.password,
+      };
+      await upsertDatabase(record);
+      await hydrateDbs();
+      setSelectedDbId(record.id);
+      setModal("none");
+    } catch (err) {
+      console.error("Failed to save connection:", err);
+      alert(err instanceof Error ? err.message : "Failed to save connection");
+    }
   }
 
   async function deleteConn(id: string) {
